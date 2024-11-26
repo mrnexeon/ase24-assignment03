@@ -45,9 +45,35 @@ public class Fuzzer {
     }
 
     private static void runCommand(ProcessBuilder builder, String seedInput, List<String> mutatedInputs) {
-        Stream.concat(Stream.of(seedInput), mutatedInputs.stream()).forEach(
-                input -> { }
-        );
+        Stream.concat(Stream.of(seedInput), mutatedInputs.stream()).forEach(input -> {
+            try {
+                Process process = builder.start();
+
+                System.out.printf("Input: %s\n", input);
+                try (OutputStream streamToCommand = process.getOutputStream()) {
+                    streamToCommand.write(input.getBytes());
+                    streamToCommand.flush();
+                }
+
+                int exitCode = process.waitFor();
+                System.out.printf("Exit code: %s\n", exitCode);
+
+                InputStream streamFromCommand = process.getInputStream();
+                String output = readStreamIntoString(streamFromCommand);
+                streamFromCommand.close();
+                System.out.printf("Output: %s\n", output
+                        // ignore warnings due to usage of gets() in test program
+                        .replaceAll("warning: this program uses gets\\(\\), which is unsafe.", "")
+                        .trim()
+                );
+
+                if (exitCode != 0) {
+                    System.out.println("Non-zero exit code detected!");
+                }
+            } catch (IOException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     private static String readStreamIntoString(InputStream inputStream) {
