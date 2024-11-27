@@ -100,5 +100,77 @@ public class Fuzzer {
         }
         return mutations;
     }
+
+    private static String insertRandomChar(String input, Random random) {
+        char randomChar = (char) (random.nextInt(95) + 32); // printable ASCII chars
+        int position = random.nextInt(input.length() + 1);
+        return input.substring(0, position) + randomChar + input.substring(position);
+    }
+
+    private static String insertExistingChar(String input, Random random) {
+        if (input.isEmpty()) return input;
+        char existingChar = input.charAt(random.nextInt(input.length()));
+        int position = random.nextInt(input.length() + 1);
+        return input.substring(0, position) + existingChar + input.substring(position);
+    }
+
+    private static String repeatChar(String input, Random random) {
+        if (input.isEmpty()) return input;
+        int position = random.nextInt(input.length());
+        char charToRepeat = input.charAt(position);
+        return input.substring(0, position + 1) + charToRepeat + input.substring(position + 1);
+    }
+
+    private static String deleteChar(String input, Random random) {
+        if (input.isEmpty()) return input;
+        int position = random.nextInt(input.length());
+        return input.substring(0, position) + input.substring(position + 1);
+    }
+
+    private static String swapChars(String input, Random random) {
+        if (input.length() < 2) return input;
+        int pos1 = random.nextInt(input.length());
+        int pos2 = random.nextInt(input.length());
+        while (pos2 == pos1) {
+            pos2 = random.nextInt(input.length());
+        }
+        char[] chars = input.toCharArray();
+        char temp = chars[pos1];
+        chars[pos1] = chars[pos2];
+        chars[pos2] = temp;
+        return new String(chars);
+    }
+
+    private static String switchCase(String input, Random random) {
+        if (input.isEmpty()) return input;
+        int position = random.nextInt(input.length());
+        char[] chars = input.toCharArray();
+        chars[position] = Character.isUpperCase(chars[position]) ? 
+                Character.toLowerCase(chars[position]) : 
+                Character.toUpperCase(chars[position]);
+        return new String(chars);
+    }
+
+    private static String flipBit(String input, Random random) {
+        if (input.isEmpty()) return input;
+        int position = random.nextInt(input.length());
+        char[] chars = input.toCharArray();
+        int bitPosition = random.nextInt(8);
+        chars[position] = (char) (chars[position] ^ (1 << bitPosition));
+        return new String(chars);
+    }
+
+    private static String insertMalformedTag(String input, Random random) {
+        String[] malformedTags = {
+            "<>", "< >", "</>", "<///>", 
+            "<tag", "tag>", 
+            "<<tag>>", 
+            "<tag attr=>", 
+            "<tag attr=\">",
+            "<tag attr=\" value>"
+        };
+        String tagToInsert = malformedTags[random.nextInt(malformedTags.length)];
+        int position = random.nextInt(input.length() + 1);
+        return input.substring(0, position) + tagToInsert + input.substring(position);
     }
 }
