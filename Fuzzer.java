@@ -94,6 +94,11 @@ public class Fuzzer {
     }
 
     private static List<String> getMutatedInputs(String seedInput, Collection<Function<String, String>> mutators) {
-        return List.of();
+        List<String> mutations = new ArrayList<>();
+        for (Function<String, String> mutator : mutators) {
+            mutations.add(mutator.apply(seedInput));
+        }
+        return mutations;
+    }
     }
 }
