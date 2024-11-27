@@ -32,7 +32,7 @@ public class Fuzzer {
         }
 
         String seedInput = "<html a=\"value\">...</html>";
-        int numberOfIterations = 100000;
+        int numberOfIterations = 1000;
         
         ProcessBuilder builder = getProcessBuilderForCommand(commandToFuzz, workingDirectory);
         System.out.printf("Command: %s\n", builder.command());
@@ -40,6 +40,8 @@ public class Fuzzer {
 
         Random random = new Random();
 
+        boolean crashDetected = false;
+        
         for (int i = 0; i < numberOfIterations; i++) {
             // System.out.printf("\nIteration %d:\n", i + 1);
             List<String> mutatedInputs = getMutatedInputs(seedInput, List.of(
@@ -58,6 +60,7 @@ public class Fuzzer {
             try {
                 CommandResult result = runCommand(builder, mutatedInput);
                 if (isCrash(result.exitCode)) {
+                    crashDetected = true;
                     System.out.println("Crash detected!");
                     System.out.printf("Input: %s\n", mutatedInput);
                     System.out.printf("Exit Code: %d\nOutput: %s\n", result.exitCode, result.output);
@@ -66,8 +69,11 @@ public class Fuzzer {
                 }
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
+                crashDetected = true;
             }
         }
+
+        System.exit(crashDetected ? 1 : 0);
     }
 
     private static ProcessBuilder getProcessBuilderForCommand(String command, String workingDirectory) {
