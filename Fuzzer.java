@@ -1,11 +1,12 @@
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Fuzzer {
     private static class CommandResult {
@@ -31,14 +32,42 @@ public class Fuzzer {
         }
 
         String seedInput = "<html a=\"value\">...</html>";
-
+        int numberOfIterations = 100000;
+        
         ProcessBuilder builder = getProcessBuilderForCommand(commandToFuzz, workingDirectory);
         System.out.printf("Command: %s\n", builder.command());
+        System.out.printf("Running %d fuzzing iterations...\n", numberOfIterations);
 
-        runCommand(builder, seedInput, getMutatedInputs(seedInput, List.of(
-                input -> input.replace("<html", "a"), // this is just a placeholder, mutators should not only do hard-coded string replacement
-                input -> input.replace("<html", "")
-        )));
+        Random random = new Random();
+
+        for (int i = 0; i < numberOfIterations; i++) {
+            // System.out.printf("\nIteration %d:\n", i + 1);
+            List<String> mutatedInputs = getMutatedInputs(seedInput, List.of(
+                    input -> insertRandomChar(input, random),
+                    input -> insertExistingChar(input, random),
+                    input -> repeatChar(input, random),
+                    input -> deleteChar(input, random),
+                    input -> swapChars(input, random),
+                    input -> switchCase(input, random),
+                    input -> flipBit(input, random),
+                    input -> insertMalformedTag(input, random)
+            ));
+
+            String mutatedInput = mutatedInputs.get(random.nextInt(mutatedInputs.size()));
+
+            try {
+                CommandResult result = runCommand(builder, mutatedInput);
+                if (isCrash(result.exitCode)) {
+                    System.out.println("Crash detected!");
+                    System.out.printf("Input: %s\n", mutatedInput);
+                    System.out.printf("Exit Code: %d\nOutput: %s\n", result.exitCode, result.output);
+                } else {
+                    seedInput = mutatedInput;
+                }
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     private static ProcessBuilder getProcessBuilderForCommand(String command, String workingDirectory) {
@@ -54,36 +83,35 @@ public class Fuzzer {
         return builder;
     }
 
-    private static void runCommand(ProcessBuilder builder, String seedInput, List<String> mutatedInputs) {
-        Stream.concat(Stream.of(seedInput), mutatedInputs.stream()).forEach(input -> {
-            try {
-                Process process = builder.start();
+    private static CommandResult runCommand(ProcessBuilder builder, String input) throws IOException, InterruptedException {
+        Process process = builder.start();
 
-                System.out.printf("Input: %s\n", input);
-                try (OutputStream streamToCommand = process.getOutputStream()) {
-                    streamToCommand.write(input.getBytes());
-                    streamToCommand.flush();
-                }
+        OutputStream streamToCommand = process.getOutputStream();
+        streamToCommand.write(input.getBytes());
+        streamToCommand.flush();
+        streamToCommand.close();
 
-                int exitCode = process.waitFor();
-                System.out.printf("Exit code: %s\n", exitCode);
+        int exitCode = process.waitFor();
+        
+        InputStream streamFromCommand = process.getInputStream();
+        String output = readStreamIntoString(streamFromCommand);
+        streamFromCommand.close();
 
-                InputStream streamFromCommand = process.getInputStream();
-                String output = readStreamIntoString(streamFromCommand);
-                streamFromCommand.close();
-                System.out.printf("Output: %s\n", output
-                        // ignore warnings due to usage of gets() in test program
-                        .replaceAll("warning: this program uses gets\\(\\), which is unsafe.", "")
-                        .trim()
-                );
+        return new CommandResult(exitCode, output);
+    }
 
-                if (exitCode != 0) {
-                    System.out.println("Non-zero exit code detected!");
-                }
-            } catch (IOException | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        });
+    private static boolean isCrash(int exitCode) {
+        if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
+            // On Windows, exit codes > 0xC0000000 indicate crashes
+            return exitCode < 0 || exitCode > 0xC0000000;
+        } else {
+            // On Unix-like systems, exit codes > 128 typically indicate crashes
+            // Common crash signals:
+            // - 134 (SIGABRT)
+            // - 139 (SIGSEGV)
+            // - 136 (SIGFPE)
+            return exitCode < 0 || (exitCode > 128 && exitCode <= 255);
+        }
     }
 
     private static String readStreamIntoString(InputStream inputStream) {
